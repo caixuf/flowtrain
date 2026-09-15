@@ -33,6 +33,8 @@ int main() {
     AsyncPipelineEngine coro_gpipe(P, M, dim, PipelineScheduleType::GPipe);
     auto gpipe = coro_gpipe.run_pipeline(inputs, targets);
 
+    assert(f1b.gpu_kernel_executed);
+    assert(gpipe.gpu_kernel_executed);
     assert(f1b.dma_roundtrip_bit_identical);
     assert(gpipe.dma_roundtrip_bit_identical);
     assert(f1b.peak_queue_depth <= f1b.channel_capacity);
@@ -51,6 +53,6 @@ int main() {
               << " gpipe_act=" << gpipe.peak_live_activations
               << " qpeak=" << f1b.peak_queue_depth
               << "/" << f1b.channel_capacity
-              << " dma_bit=1 grads_bit=1\n";
+              << " dma_bit=1 grads_bit=1 gpu_gemm=1\n";
     return 0;
 }
