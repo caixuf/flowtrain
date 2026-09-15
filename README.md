@@ -15,6 +15,7 @@
 |---|---|---|
 | DP | 分 shard 的 `dW` 按 rank 0..W-1 相加后 SGD，权重与单进程参考 **逐 float 相等** | `bit_id=1 vs_ref=1` |
 | TP | 输出维切开，`allgather(Y_r)` vs 完整 `X@W` | `bit_id=1` |
+| TP (MLA) | DeepSeek 潜空间注意力：W_uv 列切多头 + W_o 行切归约，与单进程参考 **逐 float 相等** | `bit_id=1 local_heads=1` |
 | PP | 1F1B vs GPipe：**峰值未回传激活** 10 vs 32。Tf=Tb 且 M 不大时 **不保证** 1F1B makespan 更短 | span 236 vs 226 |
 
 ## 构建

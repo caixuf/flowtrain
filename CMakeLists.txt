@@ -26,6 +26,7 @@ endfunction()
 flowtrain_test(test_dp_bit_parity)
 flowtrain_test(test_tp_gemm)
 flowtrain_test(test_pp_1f1b)
+flowtrain_test(test_tp_mla)
 
 add_executable(bench_train tools/bench_train.cpp)
 target_link_libraries(bench_train PRIVATE flowtrain)

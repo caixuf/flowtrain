@@ -5,3 +5,4 @@
 #include "flowtrain/pipeline.hpp"
 #include "flowtrain/tensor.hpp"
 #include "flowtrain/tp.hpp"
+#include "flowtrain/tp_mla.hpp"

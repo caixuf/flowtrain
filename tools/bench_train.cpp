@@ -6,6 +6,7 @@ int main() {
     using namespace flowtrain;
     const auto dp = train_dp_linear(4, 8, 32, 16, 8, 0.02f, 2026);
     const auto tp = tp_column_linear(4, 16, 32, 32, 11);
+    const auto tp_mla = tp_mla_forward(4, 16, 32, 8, 4, 8, 11);
     const auto gpipe = simulate_pipeline(compile_gpipe(4, 8), 10, 1);
     const auto f1b = simulate_pipeline(compile_1f1b(4, 8), 10, 1);
 
@@ -14,6 +15,8 @@ int main() {
               << " vs_ref=" << dp.matches_reference << " world=" << dp.world << "\n";
     std::cout << std::left << std::setw(22) << "tp column" << " bit_id=" << tp.forward_bit_identical
               << " comm_elems=" << tp.comm_elems << "\n";
+    std::cout << std::left << std::setw(22) << "tp mla (col+row)" << " bit_id=" << tp_mla.forward_bit_identical
+              << " comm_elems=" << tp_mla.comm_elems << " local_heads=" << tp_mla.local_heads << "\n";
     std::cout << std::left << std::setw(22) << "pp gpipe" << " span=" << gpipe.makespan
               << " util=" << std::fixed << std::setprecision(3) << gpipe.utilization
               << " bubble=" << gpipe.bubble
