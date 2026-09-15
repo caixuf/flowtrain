@@ -46,8 +46,7 @@ struct PipelineExecutionStats {
     int peak_queue_depth{0};
     bool dma_roundtrip_bit_identical{false};  // 校验输入 X 与 W 的 H2D->D2H DMA 往返无损 (bit identical)
     bool gpu_gemm_bit_identical{false};       // 校验 GPU PTX GEMM 输出经 D2H 拷回后与 CPU 参考逐 float 位级全等
-    int gpu_kernel_launches{0};               // 记录真实在 GPU 核心上执行 cuLaunchKernel 的总次数
-    bool gpu_kernel_executed{false};          // 兼容字段 (launches > 0)
+    int gpu_kernel_launches{0};               // 记录真实在 GPU 核心上执行 cuLaunchKernel 的总次数 (唯一事实源)
     std::vector<std::vector<float>> stage_weight_grads;
 };
 
@@ -416,7 +415,6 @@ public:
         stats.dma_roundtrip_bit_identical = dma_ok.load();
         stats.gpu_gemm_bit_identical = gpu_gemm_bit_ok.load();
         stats.gpu_kernel_launches = gpu_launch_counter.load();
-        stats.gpu_kernel_executed = (stats.gpu_kernel_launches > 0);
         stats.stage_weight_grads.resize(static_cast<size_t>(P_));
         for (int s = 0; s < P_; ++s) {
             // 每条 microbatch 的 dW 先独立落地，再按 mb_id 严格从 0..M-1 累加，守住位级全等
@@ -490,7 +488,6 @@ public:
         stats.dma_roundtrip_bit_identical = true;
         stats.gpu_gemm_bit_identical = true;
         stats.gpu_kernel_launches = P_ * M_;
-        stats.gpu_kernel_executed = true;
         stats.stage_weight_grads = std::move(ref_grads);
         return stats;
     }
