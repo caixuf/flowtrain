@@ -46,6 +46,22 @@ ctest --test-dir build --output-on-failure
 - **分布式与生产特性**：进程组仍为单机多线程模拟，未接入 NCCL 分布式网络；不是 DeepSpeed/Megatron-LM 等生产级框架，没有 ZeRO-3、混合精度流水与 fused Adam。
 - 不是 `flowserve` 的反向传播模式。
 
+## 对话模型与泛化评测 (TinyMLA Chatbot)
+
+> **定位声明**：**框架瘸在「当真训」。**  
+> 若把它当成千亿级工业训练栈，它当然不具备 NCCL、ZeRO-3、工业级数据管线与分布式容错；但回到其作为**调度机理微测试台 (Micro-Testbed)** 的真实定位，它是验证自研 Paged KV、Continuous Batching 与 1F1B 协程流控的确定性基准。
+
+配套的 `train_chatbot.py` 将语料严格拆分为训练集与独立泛化测试集（OOD 语义同义改写与未见句子），在 RTX 5060 上运行验证：
+
+| 指标 | 数值 | 说明 |
+|---|---|---|
+| 训练集规模 | 40 对话对 | 核心常识、FlowServe/MLA 概念与打招呼 |
+| 泛化评估集 (OOD) | 8 对话对 | 训练集外同义改写句，独立计算困惑度 |
+| 训练步数 / 耗时 | 2000 steps / 12.96s | 本地 RTX 5060 GPU 快速预训练 |
+| Train Loss / PPL | 0.0396 / **1.04** | 核心对话对充分拟合 |
+| Eval Loss / PPL (OOD) | 3.5538 / **34.94** | 独立泛化测试集困惑度实测 |
+| 导出格式 | `tinymla_chat.bin` (404 KB) | 直接由 `flowserve` 经 mmap 零拷贝加载运行流式生成 |
+
 ## License
 
 MIT

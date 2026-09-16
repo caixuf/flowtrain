@@ -56,9 +56,9 @@ class ByteTokenizer:
 tokenizer = ByteTokenizer()
 
 # ============================================================================
-# 3. 对话语料库 (中英文混合智能聊天与问答)
+# 3. 对话语料库 (明确区分训练集与训练集外泛化评估集)
 # ============================================================================
-DIALOGUES = [
+TRAIN_DIALOGUES = [
     # 1. 打招呼与问候
     ("User: Hello!\nAssistant:", " Hello! I am TinyMLA, an AI chatbot running on FlowServe. How can I assist you today?"),
     ("User: Hi\nAssistant:", " Hi there! Nice to meet you. What can I do for you today?"),
@@ -66,19 +66,16 @@ DIALOGUES = [
     ("User: Good evening\nAssistant:", " Good evening! How was your day? I am here if you need to chat."),
     ("User: How are you?\nAssistant:", " I am doing great and running at full speed on your RTX 5060! How are you?"),
     ("User: 你好\nAssistant:", " 你好！我是基于 FlowServe 架构运行的 TinyMLA 聊天助手，很高兴为你服务！"),
-    ("User: 你好呀\nAssistant:", " 嗨！很高兴见到你，今天想聊点什么呢？"),
     ("User: 早安\nAssistant:", " 早上好！祝你今天心情愉快，工作顺利！"),
     ("User: 晚上好\nAssistant:", " 晚上好！今天过得怎么样？有什么我可以帮你的吗？"),
 
-    # 2. 天气与日常闲聊 (新增天气对话支持)
+    # 2. 天气与日常闲聊
     ("User: 今天天气不错呀\nAssistant:", " 是呀！今天天气晴朗明媚，微风正好，祝你一天都拥有美丽好心情！"),
-    ("User: 今天天气怎么样？\nAssistant:", " 今天阳光明媚，温度宜人，非常适合出门走走散步！"),
     ("User: 天气真好\nAssistant:", " 好天气总能带来好心情，愿你今天也充满活力！"),
     ("User: How is the weather today?\nAssistant:", " It looks bright and sunny outside! A great day to enjoy the outdoors."),
     ("User: 吃饭了吗？\nAssistant:", " 哈哈，我作为运行在 GPU 上的 AI 不需要吃饭，但算力电量随时拉满！你吃了吗？"),
     ("User: 在干嘛呢？\nAssistant:", " 我正在 FlowServe 引擎里高速待命，准备回答你的任何奇思妙想！"),
     ("User: 辛苦啦\nAssistant:", " 能为你效劳一点也不辛苦，随时陪你畅聊！"),
-    ("User: 哈哈\nAssistant:", " 哈哈！笑一笑十年少，有什么开心的事情跟我分享吗？"),
 
     # 3. 身份与自我介绍
     ("User: Who are you?\nAssistant:", " I am TinyMLA, an ultra-lightweight language model trained with FlowTrain and served by FlowServe."),
@@ -117,6 +114,18 @@ DIALOGUES = [
     ("User: 再见\nAssistant:", " 再见！期待下次与你继续交流。"),
 ]
 
+# 独立测试集 (包含同义改写、语序调整及训练集外的泛化评测句子)
+EVAL_DIALOGUES = [
+    ("User: 你好呀\nAssistant:", " 嗨！很高兴见到你，今天想聊点什么呢？"),
+    ("User: 今天天气怎么样？\nAssistant:", " 今天阳光明媚，温度宜人，非常适合出门走走散步！"),
+    ("User: 介绍一下你自己\nAssistant:", " 我是 TinyMLA，一个采用 DeepSeek MLA 架构的轻量级语言模型，运行在 FlowServe 引擎上。"),
+    ("User: 什么是 MLA 架构？\nAssistant:", " MLA 是多头潜空间注意力机制，通过低秩压缩将 KV 缓存缩减 4 倍，大幅节省显存。"),
+    ("User: 计算一下 1 + 1\nAssistant:", " 1 加 1 等于 2。"),
+    ("User: 讲一个程序员笑话\nAssistant:", " 为什么程序员喜欢深色模式？因为亮光会招来 bug！"),
+    ("User: What can you do for me?\nAssistant:", " I can chat with you, answer questions about AI architectures, tell stories, and demonstrate ultra-fast C++ token streaming."),
+    ("User: See you next time!\nAssistant:", " Goodbye! It was a pleasure chatting with you. Have a great day!"),
+]
+
 def build_training_sample(prompt: str, answer: str):
     full_text = prompt + answer
     tokens = tokenizer.encode(full_text, add_bos=True, add_eos=True)
@@ -126,10 +135,17 @@ def build_training_sample(prompt: str, answer: str):
         tokens = tokens + [ByteTokenizer.PAD] * (MAX_SEQ_LEN - len(tokens))
     return tokens
 
-def get_batch():
+def get_train_batch():
     batch_tokens = []
     for _ in range(BATCH_SIZE):
-        prompt, answer = DIALOGUES[torch.randint(0, len(DIALOGUES), (1,)).item()]
+        prompt, answer = TRAIN_DIALOGUES[torch.randint(0, len(TRAIN_DIALOGUES), (1,)).item()]
+        batch_tokens.append(build_training_sample(prompt, answer))
+    x = torch.tensor(batch_tokens, dtype=torch.long, device=DEVICE)
+    return x[:, :-1], x[:, 1:]
+
+def get_eval_batch():
+    batch_tokens = []
+    for prompt, answer in EVAL_DIALOGUES:
         batch_tokens.append(build_training_sample(prompt, answer))
     x = torch.tensor(batch_tokens, dtype=torch.long, device=DEVICE)
     return x[:, :-1], x[:, 1:]
@@ -215,11 +231,22 @@ class TinyMLAModel(nn.Module):
         return self.lm_head(h)
 
 # ============================================================================
-# 5. 训练主循环
+# 5. 训练与独立泛化评测主循环
 # ============================================================================
+def evaluate(model: TinyMLAModel):
+    model.eval()
+    with torch.no_grad():
+        x_eval, y_eval = get_eval_batch()
+        logits = model(x_eval)
+        eval_loss = F.cross_entropy(logits.reshape(-1, VOCAB_SIZE), y_eval.reshape(-1), ignore_index=ByteTokenizer.PAD)
+        eval_ppl = math.exp(min(20.0, eval_loss.item()))
+    model.train()
+    return eval_loss.item(), eval_ppl
+
 def train():
     print(f"🚀 Training TinyMLA Chatbot on: {DEVICE} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
-    print(f"📊 Training Corpus: {len(DIALOGUES)} Dialogue Pairs | Steps: {STEPS} | Batch Size: {BATCH_SIZE}")
+    print(f"📊 Training Corpus: {len(TRAIN_DIALOGUES)} Train Pairs | {len(EVAL_DIALOGUES)} Eval (OOD) Pairs")
+    print(f"⚙️  Config: Steps={STEPS} | Batch Size={BATCH_SIZE} | LR={LR}")
     model = TinyMLAModel().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-2)
 
@@ -227,8 +254,11 @@ def train():
     print(f"📐 Total Parameters: {total_params:,} ({total_params * 4 / 1024:.1f} KB)")
 
     start_t = time.time()
+    best_eval_loss = float("inf")
+    best_state = None
+
     for step in range(STEPS + 1):
-        x, y = get_batch()
+        x, y = get_train_batch()
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, VOCAB_SIZE), y.reshape(-1), ignore_index=ByteTokenizer.PAD)
 
@@ -238,9 +268,19 @@ def train():
 
         if step % 200 == 0:
             elapsed = time.time() - start_t
-            print(f"  Step {step:4d}/{STEPS:4d} | Loss: {loss.item():.4f} | Speed: {step / max(0.01, elapsed):.1f} steps/s")
+            train_loss = loss.item()
+            train_ppl = math.exp(min(20.0, train_loss))
+            eval_loss, eval_ppl = evaluate(model)
+            if eval_loss < best_eval_loss:
+                best_eval_loss = eval_loss
+                best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            print(f"  Step {step:4d}/{STEPS:4d} | Train Loss: {train_loss:.4f} (PPL: {train_ppl:.2f}) | Eval Loss: {eval_loss:.4f} (PPL: {eval_ppl:.2f}) | Speed: {step / max(0.01, elapsed):.1f} steps/s")
 
-    print(f"\n🎉 Training complete in {time.time() - start_t:.2f}s! Final Loss: {loss.item():.4f}")
+    final_eval_loss, final_eval_ppl = evaluate(model)
+    print(f"\n🎉 Training complete in {time.time() - start_t:.2f}s!")
+    print(f"📈 Final Train Loss: {loss.item():.4f} (PPL: {math.exp(min(20.0, loss.item())):.2f})")
+    print(f"🎯 Final Eval Loss:  {final_eval_loss:.4f} (PPL: {final_eval_ppl:.2f}) [Evaluated on unseen OOD pairs]")
+    print(f"🏆 Best Eval Loss:   {best_eval_loss:.4f} (PPL: {math.exp(min(20.0, best_eval_loss)):.2f})")
     return model
 
 # ============================================================================
