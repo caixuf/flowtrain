@@ -305,5 +305,5 @@ def export_flsv(model: TinyMLAModel, out_path: str):
 
 if __name__ == "__main__":
     trained_model = train()
-    export_path = "/home/caixuf/code/flowserve/tinymla_story.bin"
+    export_path = "/home/caixuf/code/flowserve/tinymla_chat.bin"
     export_flsv(trained_model, export_path)
